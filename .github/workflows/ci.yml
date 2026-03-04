@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    name: Lint & Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      # 1. Check out the code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Set up the requested Python version
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # 3. Cache pip so installs are fast on repeated runs
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # 4. Install all dependencies (main + dev)
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      # 5. Ruff — check for lint errors
+      - name: Lint (ruff check)
+        run: ruff check .
+
+      # 6. Ruff — check formatting (does not auto-fix, just reports)
+      - name: Format check (ruff format)
+        run: ruff format --check .
+
+      # 7. Run tests with coverage
+      - name: Test (pytest)
+        env:
+          DISCORD_TOKEN: test_discord_token
+          NEWS_API_KEY:  test_newsdata_key
+        run: |
+          pytest tests/ --cov=bot --cov-report=term-missing
+
+      # 8. Upload coverage summary as a PR comment (optional, free tier)
+      - name: Coverage summary
+        if: always()
+        run: |
+          pytest tests/ --cov=bot --cov-report=xml -q 2>/dev/null || true
