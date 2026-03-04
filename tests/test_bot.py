@@ -5,8 +5,6 @@ Run:  pytest tests/ -v
 """
 
 import json
-import os
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
@@ -15,19 +13,18 @@ import pytest
 
 from bot import MAX_PER_CYCLE, NewsBot, build_embed, load_config, save_config
 
-
 # ══════════════════════════════════════════════════════════════════════════════
 # Fixtures
 # ══════════════════════════════════════════════════════════════════════════════
 
 SAMPLE_ARTICLE = {
-    "article_id":  "abc123",
-    "title":       "Saudi Arabia Announces New NEOM District",
-    "link":        "https://example.com/neom",
+    "article_id": "abc123",
+    "title": "Saudi Arabia Announces New NEOM District",
+    "link": "https://example.com/neom",
     "description": "Details about the new NEOM development.",
-    "image_url":   "https://example.com/image.jpg",
-    "pubDate":     "2024-06-01 10:00:00",
-    "source_id":   "arab_news",
+    "image_url": "https://example.com/image.jpg",
+    "pubDate": "2024-06-01 10:00:00",
+    "source_id": "arab_news",
 }
 
 SAMPLE_ARTICLE_MINIMAL = {
@@ -62,13 +59,13 @@ def mock_channel():
 @pytest.fixture()
 def mock_interaction(mock_guild, mock_channel):
     interaction = MagicMock(spec=discord.Interaction)
-    interaction.guild   = mock_guild
+    interaction.guild = mock_guild
     interaction.channel = mock_channel
-    interaction.user    = MagicMock()
+    interaction.user = MagicMock()
     interaction.user.__str__ = lambda _: "TestUser#0001"
-    interaction.response       = AsyncMock()
+    interaction.response = AsyncMock()
     interaction.response.is_done.return_value = False
-    interaction.followup       = AsyncMock()
+    interaction.followup = AsyncMock()
     return interaction
 
 
@@ -76,24 +73,25 @@ def mock_interaction(mock_guild, mock_channel):
 # build_embed
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestBuildEmbed:
     def test_full_article(self):
         embed = build_embed(SAMPLE_ARTICLE)
 
-        assert embed.title       == "Saudi Arabia Announces New NEOM District"
-        assert embed.url         == "https://example.com/neom"
+        assert embed.title == "Saudi Arabia Announces New NEOM District"
+        assert embed.url == "https://example.com/neom"
         assert embed.description == "Details about the new NEOM development."
-        assert embed.color       == discord.Color.red()
-        assert embed.image.url   == "https://example.com/image.jpg"
-        assert "arab_news"       in embed.footer.text
+        assert embed.color == discord.Color.red()
+        assert embed.image.url == "https://example.com/image.jpg"
+        assert "arab_news" in embed.footer.text
         assert "Gulf & Saudi Arabia" in embed.footer.text
 
     def test_minimal_article_uses_defaults(self):
         embed = build_embed(SAMPLE_ARTICLE_MINIMAL)
 
-        assert embed.title       == "Breaking News"
+        assert embed.title == "Breaking News"
         assert embed.description == "No description available."
-        assert not embed.image.url   # discord.py returns EmbedProxy, not None — check url
+        assert not embed.image.url  # discord.py returns EmbedProxy, not None — check url
 
     def test_custom_color(self):
         embed = build_embed(SAMPLE_ARTICLE, color=discord.Color.orange())
@@ -112,6 +110,7 @@ class TestBuildEmbed:
 # ══════════════════════════════════════════════════════════════════════════════
 # load_config / save_config
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestConfig:
     def test_load_config_no_file(self, tmp_path, monkeypatch):
@@ -144,6 +143,7 @@ class TestConfig:
 # NewsBot — channel management
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestChannelManagement:
     def test_get_news_channel_not_configured(self, bot_instance, mock_guild):
         assert bot_instance.get_news_channel(mock_guild) is None
@@ -163,14 +163,18 @@ class TestChannelManagement:
 
         assert bot_instance.get_news_channel(mock_guild) is None
 
-    def test_set_news_channel_updates_config(self, bot_instance, mock_guild, mock_channel, tmp_path, monkeypatch):
+    def test_set_news_channel_updates_config(
+        self, bot_instance, mock_guild, mock_channel, tmp_path, monkeypatch
+    ):
         monkeypatch.chdir(tmp_path)
         bot_instance.set_news_channel(mock_guild, mock_channel)
 
         gid = str(mock_guild.id)
         assert bot_instance.guild_config[gid]["channel_id"] == mock_channel.id
 
-    def test_set_news_channel_persists_to_file(self, bot_instance, mock_guild, mock_channel, tmp_path, monkeypatch):
+    def test_set_news_channel_persists_to_file(
+        self, bot_instance, mock_guild, mock_channel, tmp_path, monkeypatch
+    ):
         monkeypatch.chdir(tmp_path)
         bot_instance.set_news_channel(mock_guild, mock_channel)
 
@@ -182,6 +186,7 @@ class TestChannelManagement:
 # NewsBot.fetch_articles  (HTTP layer mocked)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _make_mock_session(status: int, payload: dict | None = None):
     """Helper to build a mock aiohttp session returning a given status/payload."""
     mock_resp = AsyncMock()
@@ -191,7 +196,7 @@ def _make_mock_session(status: int, payload: dict | None = None):
 
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__.return_value = mock_resp
-    mock_ctx.__aexit__.return_value  = False
+    mock_ctx.__aexit__.return_value = False
 
     mock_session = MagicMock()
     mock_session.get.return_value = mock_ctx
@@ -256,6 +261,7 @@ class TestFetchArticles:
 # NewsBot.auto_fetch loop logic
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestAutoFetch:
     async def test_skips_guilds_without_channel(self, bot_instance, mock_guild):
         """If no channel is set up, nothing is sent."""
@@ -264,7 +270,9 @@ class TestAutoFetch:
         payload = {"results": [SAMPLE_ARTICLE]}
         bot_instance.session = _make_mock_session(200, payload)
 
-        with patch.object(type(bot_instance), "guilds", new_callable=PropertyMock, return_value=[mock_guild]):
+        with patch.object(
+            type(bot_instance), "guilds", new_callable=PropertyMock, return_value=[mock_guild]
+        ):
             await bot_instance.auto_fetch()
         # No channel configured, so send should never be called
 
@@ -275,7 +283,9 @@ class TestAutoFetch:
         payload = {"results": [SAMPLE_ARTICLE]}
         bot_instance.session = _make_mock_session(200, payload)
 
-        with patch.object(type(bot_instance), "guilds", new_callable=PropertyMock, return_value=[mock_guild]):
+        with patch.object(
+            type(bot_instance), "guilds", new_callable=PropertyMock, return_value=[mock_guild]
+        ):
             await bot_instance.auto_fetch()
 
         mock_channel.send.assert_called_once()
@@ -284,12 +294,14 @@ class TestAutoFetch:
     async def test_skips_already_seen_articles(self, bot_instance, mock_guild, mock_channel):
         mock_guild.get_channel.return_value = mock_channel
         bot_instance.guild_config = {str(mock_guild.id): {"channel_id": mock_channel.id}}
-        bot_instance.seen_ids.add("abc123")   # already seen
+        bot_instance.seen_ids.add("abc123")  # already seen
 
         payload = {"results": [SAMPLE_ARTICLE]}
         bot_instance.session = _make_mock_session(200, payload)
 
-        with patch.object(type(bot_instance), "guilds", new_callable=PropertyMock, return_value=[mock_guild]):
+        with patch.object(
+            type(bot_instance), "guilds", new_callable=PropertyMock, return_value=[mock_guild]
+        ):
             await bot_instance.auto_fetch()
 
         mock_channel.send.assert_not_called()
@@ -299,10 +311,14 @@ class TestAutoFetch:
         bot_instance.guild_config = {str(mock_guild.id): {"channel_id": mock_channel.id}}
 
         # Create more articles than MAX_PER_CYCLE
-        articles = [{"article_id": f"id{i}", "title": f"News {i}"} for i in range(MAX_PER_CYCLE + 3)]
+        articles = [
+            {"article_id": f"id{i}", "title": f"News {i}"} for i in range(MAX_PER_CYCLE + 3)
+        ]
         bot_instance.session = _make_mock_session(200, {"results": articles})
 
-        with patch.object(type(bot_instance), "guilds", new_callable=PropertyMock, return_value=[mock_guild]):
+        with patch.object(
+            type(bot_instance), "guilds", new_callable=PropertyMock, return_value=[mock_guild]
+        ):
             await bot_instance.auto_fetch()
 
         assert mock_channel.send.call_count == MAX_PER_CYCLE
@@ -312,9 +328,9 @@ class TestAutoFetch:
 # Slash commands  (call .callback directly to bypass Discord permission checks)
 # ══════════════════════════════════════════════════════════════════════════════
 
-from unittest.mock import PropertyMock   # noqa: E402
+from unittest.mock import PropertyMock  # noqa: E402
 
-import bot as bot_module   # noqa: E402 — needed to access module-level bot + commands
+import bot as bot_module  # noqa: E402 — needed to access module-level bot + commands
 
 
 class TestCmdSetup:
@@ -358,8 +374,10 @@ class TestCmdStop:
         assert call.kwargs.get("ephemeral") is True
 
     async def test_stops_running_loop(self, mock_interaction):
-        with patch.object(bot_module.bot.auto_fetch, "is_running", return_value=True), \
-             patch.object(bot_module.bot.auto_fetch, "cancel") as mock_cancel:
+        with (
+            patch.object(bot_module.bot.auto_fetch, "is_running", return_value=True),
+            patch.object(bot_module.bot.auto_fetch, "cancel") as mock_cancel,
+        ):
             await bot_module.cmd_stop.callback(mock_interaction)
 
         mock_cancel.assert_called_once()

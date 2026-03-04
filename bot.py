@@ -3,14 +3,15 @@ Gulf & Saudi Arabia Breaking News Bot
 Powered by newsdata.io
 """
 
-import discord
-from discord.ext import tasks, commands
-from discord import app_commands
-import aiohttp
+import json
 import logging
 import os
-import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
+import aiohttp
+import discord
+from discord import app_commands
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -23,11 +24,11 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-TOKEN        = os.getenv("DISCORD_TOKEN")
+TOKEN = os.getenv("DISCORD_TOKEN")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
-CONFIG_FILE  = "config.json"          # stores channel IDs per guild
-BASE_URL     = "https://newsdata.io/api/1/news"
-MAX_PER_CYCLE = 5                     # articles per auto-fetch
+CONFIG_FILE = "config.json"  # stores channel IDs per guild
+BASE_URL = "https://newsdata.io/api/1/news"
+MAX_PER_CYCLE = 5  # articles per auto-fetch
 
 
 # ── Persistent guild config (config.json) ──────────────────────────────────────
@@ -36,6 +37,7 @@ def load_config() -> dict:
         with open(CONFIG_FILE) as f:
             return json.load(f)
     return {}
+
 
 def save_config(data: dict):
     with open(CONFIG_FILE, "w") as f:
@@ -53,9 +55,7 @@ def build_embed(article: dict, color: discord.Color = discord.Color.red()) -> di
     )
     if pub_date:
         embed.set_author(name=f"Published: {pub_date}")
-    embed.set_footer(
-        text=f"📰 {article.get('source_id', 'Unknown')}  |  🌍 Gulf & Saudi Arabia"
-    )
+    embed.set_footer(text=f"📰 {article.get('source_id', 'Unknown')}  |  🌍 Gulf & Saudi Arabia")
     if article.get("image_url"):
         embed.set_image(url=article["image_url"])
     return embed
@@ -69,7 +69,7 @@ class NewsBot(commands.Bot):
         self.seen_ids: set[str] = set()
         self.session: aiohttp.ClientSession | None = None
         self.last_fetch: datetime | None = None
-        self.guild_config: dict = load_config()   # {guild_id: {"channel_id": int}}
+        self.guild_config: dict = load_config()  # {guild_id: {"channel_id": int}}
 
     # ── Channel helpers ────────────────────────────────────────────────────────
     def get_news_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
@@ -113,11 +113,11 @@ class NewsBot(commands.Bot):
         size: int = 10,
     ) -> list[dict]:
         params = {
-            "apikey":   NEWS_API_KEY,
-            "country":  "sa,ae",
+            "apikey": NEWS_API_KEY,
+            "country": "sa,ae",
             "language": "ar,en",
             "category": category,
-            "size":     size,
+            "size": size,
         }
         if query:
             params["q"] = query
@@ -132,7 +132,7 @@ class NewsBot(commands.Bot):
                     log.error("newsdata.io API returned HTTP %s", resp.status)
                     return []
                 data = await resp.json()
-                self.last_fetch = datetime.now(timezone.utc)
+                self.last_fetch = datetime.now(UTC)
                 return data.get("results", [])
         except aiohttp.ClientError as exc:
             log.error("HTTP error fetching news: %s", exc)
@@ -227,7 +227,9 @@ async def cmd_stop(interaction: discord.Interaction):
 
 
 # ── /latest ────────────────────────────────────────────────────────────────────
-@bot.tree.command(name="latest", description="Fetch and post the latest Gulf & Saudi news right now.")
+@bot.tree.command(
+    name="latest", description="Fetch and post the latest Gulf & Saudi news right now."
+)
 async def cmd_latest(interaction: discord.Interaction):
     await interaction.response.defer(thinking=True)
 
@@ -242,7 +244,9 @@ async def cmd_latest(interaction: discord.Interaction):
     new = [a for a in articles if a.get("article_id") not in bot.seen_ids]
 
     if not new:
-        await interaction.followup.send("No new articles right now. Check back soon!", ephemeral=True)
+        await interaction.followup.send(
+            "No new articles right now. Check back soon!", ephemeral=True
+        )
         return
 
     count = 0
@@ -271,7 +275,7 @@ async def cmd_search(interaction: discord.Interaction, query: str):
 
     embeds = [build_embed(a, color=discord.Color.orange()) for a in articles[:5]]
     await interaction.followup.send(
-        content=f"🔍 Top results for **\"{query}\"**:",
+        content=f'🔍 Top results for **"{query}"**:',
         embeds=embeds,
     )
 
@@ -280,14 +284,16 @@ async def cmd_search(interaction: discord.Interaction, query: str):
 @bot.tree.command(name="status", description="Show bot status and stats.")
 async def cmd_status(interaction: discord.Interaction):
     channel = bot.get_news_channel(interaction.guild)
-    last = (
-        f"<t:{int(bot.last_fetch.timestamp())}:R>" if bot.last_fetch else "Not yet"
-    )
+    last = f"<t:{int(bot.last_fetch.timestamp())}:R>" if bot.last_fetch else "Not yet"
 
     embed = discord.Embed(title="Gulf News Bot — Status", color=discord.Color.blurple())
-    embed.add_field(name="⚡ Auto Feed",    value="Running" if bot.auto_fetch.is_running() else "Stopped", inline=True)
-    embed.add_field(name="🕐 Last Fetch",   value=last,                                                     inline=True)
-    embed.add_field(name="📄 Seen Articles", value=str(len(bot.seen_ids)),                                  inline=True)
+    embed.add_field(
+        name="⚡ Auto Feed",
+        value="Running" if bot.auto_fetch.is_running() else "Stopped",
+        inline=True,
+    )
+    embed.add_field(name="🕐 Last Fetch", value=last, inline=True)
+    embed.add_field(name="📄 Seen Articles", value=str(len(bot.seen_ids)), inline=True)
     embed.add_field(
         name="📺 News Channel",
         value=channel.mention if channel else "Not set — run `/setup`",
@@ -324,10 +330,7 @@ async def cmd_help(interaction: discord.Interaction):
     )
     embed.add_field(
         name="ℹ️ Info",
-        value=(
-            "`/status` — Show bot status\n"
-            "`/help`   — Show this message"
-        ),
+        value=("`/status` — Show bot status\n`/help`   — Show this message"),
         inline=False,
     )
     embed.set_footer(text="Auto-fetch runs every 15 minutes • Source: newsdata.io")
@@ -336,7 +339,9 @@ async def cmd_help(interaction: discord.Interaction):
 
 # ── Global command error handler ───────────────────────────────────────────────
 @bot.tree.error
-async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+async def on_app_command_error(
+    interaction: discord.Interaction, error: app_commands.AppCommandError
+):
     if isinstance(error, app_commands.MissingPermissions):
         msg = "You need **Administrator** permission to use this command."
     else:
